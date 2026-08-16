@@ -2,13 +2,6 @@
 #include <WiFi.h>
 #include <esp_system.h>
 
-// Must be defined before WebSocketsClient.h is included - the library gates
-// its internal DEBUG_WEBSOCKETS(...) prints on this macro. So far we only
-// ever see the *symptom* ("no close frame received or sent" on the Python
-// side) with nothing about *why* the TLS/TCP layer actually died on the
-// ESP32 end. This turns that on so the serial log shows the library's own
-// diagnosis (TLS alert, ping timeout, buffer issue, etc.) next time it
-// happens, instead of having to keep guessing at root causes.
 #define DEBUG_WEBSOCKETS_PORT Serial
 
 #include <WiFiManager.h>
@@ -20,10 +13,10 @@
 #include <freertos/semphr.h>
 
 
-const char* ws_host = "amari-formic-helene.ngrok-free.dev"; // ngrok-туннель до server.py (было: локальный IP)
+const char* ws_host = "amari-formic-helene.ngrok-free.dev";
 const uint16_t ws_port = 443;
 const char* ws_path = "/";
-const bool ws_use_ssl = true; // ngrok отдаёт https/wss, plain ws на 8765 больше не используется
+const bool ws_use_ssl = true;
 
 const char* WIFI_SETUP_AP_NAME = "Potato-GLaDOS-Setup";
 const char* WIFI_SETUP_AP_PASS = "potato1234";
@@ -74,18 +67,13 @@ volatile unsigned long pending_module_switch_at = 0;
 #define PORTAL_ACTION_SEND_DELAY_MS 800
 
 
-int speaker_volume = 80; // 0-100, applied as a gain scale on playback
-volatile int speaker_volume_live = 80; // audioPlaybackTask (other core) reads this one
+int speaker_volume = 80;
+volatile int speaker_volume_live = 80;
 
 volatile bool muted_by_button   = false;
 volatile bool muted_by_playback = false;
 volatile bool muted_by_processing = false;
 
-// When the setup portal closes we want GLaDOS to "wake back up" - resend
-// the current module so the server replays its boot greeting, same as a
-// fresh module switch does. Only actually sent once the portal AP is
-// fully torn down (see loop()) - sending it while the AP radio is still
-// up is what was crashing the websocket (close code 1002).
 volatile bool pending_portal_greeting_replay = false;
 volatile unsigned long pending_portal_greeting_replay_at = 0;
 
@@ -138,8 +126,6 @@ void potatoFlicker() {
     if (now >= flicker_until) {
       in_dip = false;
       if (stutters_left > 0) {
-
-
         stutters_left--;
         next_stutter_at = now + random(20, 90);
       }
@@ -352,16 +338,11 @@ void setupSpkI2S() {
 
 #define AUDIO_PREBUFFER_TIMEOUT_MS 600
 
-// The values above were tuned against near-ideal ping (client and server on
-// the same LAN/localhost). On a real link (ngrok hop, weak wifi, mobile
-// data) chunk arrival gets jittery and a fixed ~0.9s cushion isn't enough,
-// so we grow it on demand instead of hand-tuning for a "worst case" that
-// makes the good case sluggish.
-#define AUDIO_PREBUFFER_MIN_BYTES 19845                 // ~0.45s @ 22050Hz/16-bit
-#define AUDIO_PREBUFFER_MAX_BYTES 61740                 // ~1.4s, stays under queue capacity
-#define AUDIO_PREBUFFER_STEP_BYTES 8000                 // ~0.18s per grow/shrink step
-#define AUDIO_PREBUFFER_BYTES_PER_MS 44.1                // 22050Hz * 2 bytes / 1000ms
-#define AUDIO_PREBUFFER_HEALTHY_MS 15000                 // clean playback before we shrink back
+#define AUDIO_PREBUFFER_MIN_BYTES 19845
+#define AUDIO_PREBUFFER_MAX_BYTES 61740
+#define AUDIO_PREBUFFER_STEP_BYTES 8000
+#define AUDIO_PREBUFFER_BYTES_PER_MS 44.1
+#define AUDIO_PREBUFFER_HEALTHY_MS 15000
 
 uint8_t audio_queue[AUDIO_QUEUE_CAPACITY];
 size_t  audio_queue_head = 0;
@@ -371,11 +352,6 @@ size_t  audio_queue_len  = 0;
 volatile bool audio_priming = true;
 volatile unsigned long audio_priming_start_ms = 0;
 
-// Adaptive jitter-buffer target: starts at the "ideal ping" default and
-// grows a step every time we actually starve mid-playback, shrinks back a
-// step after a healthy stretch with no underruns. This trades a bit more
-// startup latency for fewer audible stutters once the real network turns
-// out worse than whatever it was tested on.
 volatile size_t audio_prebuffer_target = AUDIO_PREBUFFER_BYTES;
 volatile unsigned long audio_last_underrun_ms = 0;
 
@@ -388,21 +364,15 @@ void audioQueuePush(const uint8_t* data, size_t len) {
   xSemaphoreTake(audio_queue_mutex, portMAX_DELAY);
 
   if (audio_queue_len == 0 && len > 0) {
-
-
     audio_priming_start_ms = millis();
   }
 
   if (len > AUDIO_QUEUE_CAPACITY) {
-
-
     data += (len - AUDIO_QUEUE_CAPACITY);
     len = AUDIO_QUEUE_CAPACITY;
   }
   size_t free_space = AUDIO_QUEUE_CAPACITY - audio_queue_len;
   if (len > free_space) {
-
-
     size_t to_drop = len - free_space;
     audio_queue_head = (audio_queue_head + to_drop) % AUDIO_QUEUE_CAPACITY;
     audio_queue_len -= to_drop;
@@ -437,13 +407,10 @@ size_t audioQueuePop(uint8_t* out, size_t max_len) {
 
 
 void audioPlaybackTask(void* pvParameters) {
-
-
   float led_level = 0.0f;
 
   for (;;) {
     if (audio_queue_len == 0) {
-
       if (!audio_priming) {
         audio_underrun_count++;
         unsigned long now = millis();
@@ -461,9 +428,6 @@ void audioPlaybackTask(void* pvParameters) {
     }
 
     if (audio_priming) {
-      // After a long clean stretch with no underruns, ease the target back
-      // down so a since-recovered network doesn't keep paying the extra
-      // startup latency forever.
       if (audio_prebuffer_target > AUDIO_PREBUFFER_MIN_BYTES &&
           (millis() - audio_last_underrun_ms) >= AUDIO_PREBUFFER_HEALTHY_MS) {
         audio_prebuffer_target -= min((size_t)AUDIO_PREBUFFER_STEP_BYTES,
@@ -500,7 +464,7 @@ void audioPlaybackTask(void* pvParameters) {
     if (samples_in_piece > 0) {
       int16_t* samples = (int16_t*)piece;
 
-      int vol = speaker_volume_live; // snapshot, may change mid-loop from the other core
+      int vol = speaker_volume_live;
       if (vol != 100) {
         for (size_t i = 0; i < samples_in_piece; i++) {
           int32_t s = (int32_t)samples[i] * vol / 100;
@@ -547,15 +511,6 @@ void portalTask(void* pvParameters) {
 }
 
 
-// The server now sends synthesized speech as 8-bit unsigned linear PCM
-// (half the bytes of 16-bit for the same duration — see server.py
-// float_to_pcm8_bytes) to cut download time and underrun risk on a bad
-// link. Expand it back to signed 16-bit right here, before it ever reaches
-// audioQueuePush(), so the jitter buffer / adaptive prebuffer / I2S write
-// code below stays exactly as it was and doesn't need to know the wire
-// format changed. Expanded in small pieces through a tiny static buffer
-// rather than one buffer sized for a whole chunk — DRAM on this chip is
-// already tight because of the 64KB audio_queue below.
 #define WS_BIN_EXPAND_PIECE_BYTES 256
 static uint8_t ws_bin_expand_buf[WS_BIN_EXPAND_PIECE_BYTES * 2];
 
@@ -584,19 +539,10 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t length) {
       Serial.print(" bytes, largest contiguous block: ");
       Serial.print(ESP.getMaxAllocHeap());
       Serial.println(" bytes");
-      // If this is really Wi-Fi airtime contention (see notes on
-      // enableHeartbeat above), RSSI should look weak/degraded right at the
-      // moment of disconnect - logging it here turns "probably Wi-Fi" into
-      // something checkable against the server's own timing logs instead
-      // of staying a guess.
       Serial.print("[diag] RSSI at disconnect: ");
       Serial.print(WiFi.RSSI());
       Serial.println(" dBm");
 
-      // See the muted_by_processing comment block above this switch: if the
-      // drop happened between MUTE and the reply's first BIN chunk, that
-      // flag would otherwise never get cleared and the mic would stay dead
-      // forever. Next reconnect is treated as a fresh slate.
       muted_by_processing = false;
       break;
 
@@ -613,10 +559,6 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t length) {
     }
 
     case WStype_BIN: {
-      // Real reply audio has started arriving - hand mute duty over to
-      // muted_by_playback (set inside audioPlaybackTask once it starts
-      // popping from the queue) so the mic stays quiet through playback
-      // too, instead of just for the "server is thinking" gap.
       muted_by_processing = false;
 
       Serial.printf("[ws] response received, %u bytes (8-bit)\n", (unsigned)length);
@@ -716,8 +658,6 @@ void handleButton() {
 }
 
 void micReadAndSend() {
-
-
   static bool was_paused_for_portal = false;
   if (portal_active != was_paused_for_portal) {
     Serial.println(portal_active
@@ -825,13 +765,6 @@ void setupWifi() {
   WiFi.config(WiFi.localIP(), WiFi.gatewayIP(), WiFi.subnetMask(),
               IPAddress(8, 8, 8, 8), IPAddress(1, 1, 1, 1));
 
-
-  // Portal starts OFF by default now that it can be toggled on demand
-  // (hold button 5s) — this avoids any AP/STA radio contention during
-  // normal voice interaction. Uncomment the next line to keep the old
-  // always-on behavior instead.
-  // enablePortal();
-
   Serial.print("[wifi] setup access point available (hold button 5s to toggle): ");
   Serial.println(WIFI_SETUP_AP_NAME);
 
@@ -874,7 +807,7 @@ void setup() {
 
   audio_queue_mutex = xSemaphoreCreateMutex();
   portal_state_mutex = xSemaphoreCreateMutex();
-  audio_last_underrun_ms = millis(); // don't shrink the prebuffer before we've seen any real traffic
+  audio_last_underrun_ms = millis();
 
 
   xTaskCreatePinnedToCore(audioPlaybackTask, "audioPlayback", 4096, NULL, 2, NULL, 1);
@@ -907,21 +840,6 @@ void setup() {
   }
   webSocket.onEvent(onWsEvent);
   webSocket.setReconnectInterval(3000);
-  // Actively probe the link instead of only finding out it's dead the next
-  // time we try to write to it (that's what the "no close frame received
-  // or sent" server-side crash was - the socket died silently with no
-  // TCP/TLS-level notice on either end, and the failure only surfaced on
-  // the next send). ping every 15s, must get a pong within 3s, 2 misses
-  // before the library tears it down and reconnects.
-  // ping every 15s, must get a pong within 5s, 3 misses before the library
-  // tears it down and reconnects. (Confirmed via a diagnostic build with
-  // this disabled that heartbeat was NOT the cause of the earlier
-  // "Connection reset by peer" disconnects - that was mic-flood
-  // backpressure, fixed via the MUTE/UNMUTE protocol above. Loosened from
-  // 3000ms/2 misses to 5000ms/3 misses after a disconnect that coincided
-  // with a real internet search (~6s of DDGS traffic on the same Wi-Fi
-  // adapter the ESP32 talks to the PC over) - the tighter timing wasn't
-  // leaving enough margin for that kind of transient channel contention.)
   webSocket.enableHeartbeat(15000, 5000, 3);
 
 
@@ -929,15 +847,6 @@ void setup() {
 }
 
 void loop() {
-
-
-  // webSocket.loop() must run every pass no matter how full the audio
-  // queue is: it's what processes heartbeat ping/pong and drains incoming
-  // TCP data. Gating it on queue level used to starve the heartbeat once
-  // the queue got close to full (easy to hit on a fast/local link where
-  // chunks arrive well ahead of playback), which silently killed the
-  // connection. Overflow itself is already handled safely inside
-  // audioQueuePush (oldest bytes get dropped), so no gate is needed here.
   webSocket.loop();
 
   if (pending_module_switch && !portal_active && (millis() - pending_module_switch_at) >= PORTAL_ACTION_SEND_DELAY_MS) {
@@ -945,17 +854,12 @@ void loop() {
       xSemaphoreTake(portal_state_mutex, portMAX_DELAY);
       String module_to_send = pending_module_id;
       pending_module_switch = false;
-      // The portal-close handler below would otherwise also fire and
-      // send a redundant MODULE: for the same (now-current) module.
       pending_portal_greeting_replay = false;
       xSemaphoreGive(portal_state_mutex);
 
       webSocket.sendTXT("MODULE:" + module_to_send);
       Serial.println("[glados] notified server of module change, greeting will replay");
     } else {
-      // Not connected right now (e.g. mid-reconnect after an AP-airtime
-      // hiccup) - leave the flag set so we retry on a later loop() pass
-      // instead of silently dropping the requested module change.
       Serial.println("[glados] module switch pending, websocket not connected yet - will retry");
     }
   }
