@@ -20,7 +20,7 @@ Close the launcher after. Keep "GLaDOS Server - LIVE LOG" window open if you wan
 - hold 15s = full Wi-Fi reset
 
 **Modules** — say "Гладос, модуль <name>":
-классик, уитли, космос, факт, приключений, любопытства, морали
+стандарт, уитли, космос, факт, приключений, любопытства, морали
 
 ---
 
