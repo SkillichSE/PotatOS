@@ -19,7 +19,7 @@ Close the launcher after. Keep "GLaDOS Server - LIVE LOG" window open if you wan
 - hold 5s = open Wi-Fi setup menu (change module/volume)
 - hold 15s = full Wi-Fi reset
 
-**Modules** — say "Гладос, модуль <name>":
+**Modules** - say "Гладос, модуль <name>":
 стандарт, уитли, космос, факт, приключений, любопытства, морали
 
 ---
@@ -88,9 +88,9 @@ Flash over USB as usual.
 
 ## Troubleshooting
 
-- **Red LED, not blinking** — can't reach server. Confirm `start.bat` said "ALL READY." Just rebooted? Wait a few sec.
-- **LM Studio fails** — open it manually, Developer tab, model loaded + "Serve on Local Network" on.
-- **ngrok fails** — check `logs\ngrok_*.log`. Usually missing authtoken or domain not on your account.
-- **Server crashes on startup** — check "LIVE LOG" window for the error.
-- **Bad recognition** — get closer to mic, speak clearer, check for electrical noise nearby.
-- **ESP32 disconnects mid-reply** — check serial log for reset reason + RSSI. Server auto-resends on reconnect.
+- **Red LED, not blinking** - can't reach server. Confirm `start.bat` said "ALL READY." Just rebooted? Wait a few sec.
+- **LM Studio fails** - open it manually, Developer tab, model loaded + "Serve on Local Network" on.
+- **ngrok fails** - check `logs\ngrok_*.log`. Usually missing authtoken or domain not on your account.
+- **Server crashes on startup** - check "LIVE LOG" window for the error.
+- **Bad recognition** - get closer to mic, speak clearer, check for electrical noise nearby.
+- **ESP32 disconnects mid-reply** - check serial log for reset reason + RSSI. Server auto-resends on reconnect.
