@@ -4,9 +4,9 @@ ESP32 box + mic + speaker. Say "Гладос" + question, she answers in GLaDOS'
 
 ---
 
-## Daily use
+## Usee
 
-1. Double-click `start.bat`
+1. Start `start.bat`
 2. Wait 1-3 min
 3. Green "ALL READY" = good. Red "PROBLEM DETECTED" = check which step failed, see Troubleshooting.
 
