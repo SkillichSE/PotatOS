@@ -13,7 +13,7 @@
 #include <freertos/semphr.h>
 
 
-const char* ws_host = "amari-formic-helene.ngrok-free.dev";
+const char* ws_host = "steellegend.taila511f4.ts.net";
 const uint16_t ws_port = 443;
 const char* ws_path = "/";
 const bool ws_use_ssl = true;

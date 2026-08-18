@@ -8,21 +8,19 @@ color 0E
 set "PYTHON_EXE=C:\Users\Ardor\AppData\Local\Python\bin\python.exe"
 set "SERVER_SCRIPT=G:\projects\PotatOS\main\server\server.py"
 set "LMSTUDIO_EXE=C:\Users\Ardor\AppData\Local\Programs\LM Studio\LM Studio.exe"
-set "NGROK_EXE=ngrok"
-set "NGROK_DOMAIN=amari-formic-helene.ngrok-free.dev"
+set "TAILSCALE_EXE=tailscale"
+set "FUNNEL_HOST=steellegend.taila511f4.ts.net"
 set "LOCAL_WS_PORT=8765"
 set "LMSTUDIO_URL=http://localhost:1234/v1/models"
 
 set "LOG_DIR=%~dp0logs"
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 set "SERVER_LOG=%LOG_DIR%\server_%RANDOM%.log"
-set "NGROK_LOG=%LOG_DIR%\ngrok_%RANDOM%.log"
 
 echo STARTING GLaDOS  -  %DATE% %TIME%
 echo.
 
 echo [0/4] Stopping leftover processes (if any)...
-taskkill /F /IM ngrok.exe >nul 2>&1
 taskkill /F /T /FI "WINDOWTITLE eq GLaDOS Server - LIVE LOG*" >nul 2>&1
 powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*server.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
 powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*Tee-Object*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }" >nul 2>&1
@@ -59,26 +57,25 @@ if "!LM_OK!"=="1" (
 )
 echo.
 
-echo [2/4] Starting ngrok tunnel (%NGROK_DOMAIN%)...
-start "ngrok" /min cmd /c ""%NGROK_EXE%" http --url=https://%NGROK_DOMAIN% %LOCAL_WS_PORT% --log=stdout > "%NGROK_LOG%" 2>&1"
-
-set NGROK_OK=0
-for /l %%i in (1,1,20) do (
-    curl -s http://127.0.0.1:4040/api/tunnels > "%TEMP%\ngrokstatus.txt" 2>nul
-    findstr /I "%NGROK_DOMAIN%" "%TEMP%\ngrokstatus.txt" >nul
+echo [2/4] Checking Tailscale Funnel (%FUNNEL_HOST%)...
+set FUNNEL_OK=0
+for /l %%i in (1,1,10) do (
+    "%TAILSCALE_EXE%" funnel status > "%TEMP%\funnelstatus.txt" 2>nul
+    findstr /I "Funnel on" "%TEMP%\funnelstatus.txt" >nul
     if not errorlevel 1 (
-        set NGROK_OK=1
-        goto ngrok_done
+        set FUNNEL_OK=1
+        goto funnel_done
     )
+    echo       Funnel not active yet, trying to bring it back up...
+    "%TAILSCALE_EXE%" funnel --bg %LOCAL_WS_PORT% >nul 2>&1
     timeout /t 2 >nul
 )
-:ngrok_done
-if "!NGROK_OK!"=="1" (
-    echo       [OK] Tunnel is up: https://%NGROK_DOMAIN%
+:funnel_done
+if "!FUNNEL_OK!"=="1" (
+    echo       [OK] Funnel is up: https://%FUNNEL_HOST%
 ) else (
-    echo       [FAIL] Tunnel did not come up! Check %NGROK_LOG%
-    echo       Common cause: domain not reserved on this account,
-    echo       or authtoken not configured ^(ngrok config add-authtoken ...^).
+    echo       [FAIL] Funnel did not come up! Run "tailscale funnel status" manually.
+    echo       Common cause: Tailscale service not running, or you're logged out.
 )
 echo.
 
@@ -109,7 +106,7 @@ if "!SERVER_OK!"=="1" (
 )
 echo.
 
-if "!LM_OK!"=="1" if "!NGROK_OK!"=="1" if "!SERVER_OK!"=="1" (
+if "!LM_OK!"=="1" if "!FUNNEL_OK!"=="1" if "!SERVER_OK!"=="1" (
     color 0A
     echo.
     echo    ALL READY. GLaDOS IS ONLINE. YOU CAN CLOSE ANYDESK NOW.
@@ -123,12 +120,12 @@ if "!LM_OK!"=="1" if "!NGROK_OK!"=="1" if "!SERVER_OK!"=="1" (
 echo.
 echo Logs for reference:
 echo   %SERVER_LOG%
-echo   %NGROK_LOG%
 echo.
 echo A separate window titled "GLaDOS Server - LIVE LOG" is now open and
 echo shows everything the server hears and replies, live, in real time.
 echo Leave that window open to watch it. This launcher window is safe
-echo to close - the server, ngrok and LM Studio keep running regardless.
+echo to close - the server and LM Studio keep running regardless, and Tailscale
+echo Funnel stays up in the background on its own.
 echo.
 pause
 goto :eof
